@@ -1,0 +1,364 @@
+<!DOCTYPE html>
+<html lang="ja">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>ITエンジニア用語フラッシュカード・ブリッツ</title>
+<script src="https://cdn.tailwindcss.com"></script>
+<style>
+  *:focus-visible { outline: 2px solid #6366f1; outline-offset: 2px; }
+  .card-container { perspective: 1000px; }
+  .card-inner { transition: transform 0.5s; transform-style: preserve-3d; position: relative; }
+  .card-inner.flipped { transform: rotateY(180deg); }
+  .card-front, .card-back { backface-visibility: hidden; -webkit-backface-visibility: hidden; }
+  .card-back { transform: rotateY(180deg); }
+  @keyframes slideIn { from { opacity:0; transform: translateX(40px); } to { opacity:1; transform: translateX(0); } }
+  .slide-in { animation: slideIn 0.3s ease; }
+  .timer-bar { transition: width 1s linear; }
+</style>
+</head>
+<body class="bg-gradient-to-br from-indigo-50 to-purple-100 min-h-screen p-4">
+
+<div class="max-w-2xl mx-auto">
+  <header class="text-center py-5">
+    <h1 class="text-3xl font-bold text-indigo-800">⚡ ITエンジニア用語 フラッシュカード</h1>
+    <p class="text-indigo-500 mt-1">採用試験対策・技術用語完全マスター</p>
+  </header>
+
+  <!-- Filter Bar -->
+  <div class="bg-white rounded-2xl shadow p-4 mb-4 flex flex-wrap gap-3 items-center">
+    <div>
+      <label class="text-xs font-semibold text-gray-500 block mb-1">カテゴリ</label>
+      <select id="filter-category" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-400" aria-label="カテゴリフィルター">
+        <option value="all">すべて</option>
+        <option value="network">ネットワーク</option>
+        <option value="database">データベース</option>
+        <option value="infra">インフラ</option>
+        <option value="security">セキュリティ</option>
+        <option value="arch">アーキテクチャ</option>
+      </select>
+    </div>
+    <div>
+      <label class="text-xs font-semibold text-gray-500 block mb-1">難易度</label>
+      <select id="filter-level" onchange="applyFilters()" class="border border-gray-300 rounded-lg px-3 py-1.5 text-sm focus:ring-2 focus:ring-indigo-400" aria-label="難易度フィルター">
+        <option value="all">すべて</option>
+        <option value="junior">ジュニア</option>
+        <option value="middle">ミドル</option>
+        <option value="senior">シニア</option>
+      </select>
+    </div>
+    <div class="ml-auto flex gap-2">
+      <button onclick="startStudy()" class="bg-indigo-600 hover:bg-indigo-700 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">📖 学習モード</button>
+      <button onclick="startBlitz()" class="bg-orange-500 hover:bg-orange-600 text-white px-4 py-2 rounded-lg text-sm font-semibold transition">⏱ ブリッツ30秒</button>
+    </div>
+  </div>
+
+  <!-- Stats Bar -->
+  <div class="bg-white rounded-2xl shadow p-3 mb-4 flex gap-4 text-center text-sm">
+    <div class="flex-1"><p class="text-xs text-gray-400">デッキ枚数</p><p id="stat-total" class="font-bold text-indigo-700">-</p></div>
+    <div class="flex-1"><p class="text-xs text-gray-400">正答率</p><p id="stat-rate" class="font-bold text-green-600">-</p></div>
+    <div class="flex-1"><p class="text-xs text-gray-400">ブックマーク</p><p id="stat-bm" class="font-bold text-amber-500">-</p></div>
+    <div class="flex-1"><p class="text-xs text-gray-400">ブリッツ記録</p><p id="stat-blitz" class="font-bold text-orange-600">-</p></div>
+  </div>
+
+  <!-- Blitz Timer -->
+  <div id="blitz-bar" class="hidden bg-white rounded-2xl shadow p-4 mb-4">
+    <div class="flex justify-between items-center mb-2">
+      <span class="text-sm font-semibold text-orange-600">⏱ タイムアタック</span>
+      <span id="blitz-time" class="text-2xl font-bold text-orange-500">30</span>
+    </div>
+    <div class="w-full bg-gray-200 rounded-full h-3">
+      <div id="blitz-progress" class="timer-bar bg-orange-400 h-3 rounded-full" style="width:100%"></div>
+    </div>
+    <p class="text-sm text-gray-500 mt-1">正解: <span id="blitz-score" class="font-bold text-green-600">0</span> 問</p>
+  </div>
+
+  <!-- Card -->
+  <div id="card-area" class="hidden mb-4">
+    <div class="card-container cursor-pointer" onclick="flipCard()" tabindex="0" role="button" aria-label="カードをめくる" onkeydown="if(event.key==='Enter'||event.key===' ')flipCard()">
+      <div id="card-inner" class="card-inner bg-white rounded-2xl shadow-xl min-h-56">
+        <div class="card-front absolute inset-0 flex flex-col items-center justify-center p-8 rounded-2xl">
+          <p id="card-category" class="text-xs font-semibold text-indigo-400 mb-3 uppercase tracking-widest"></p>
+          <p id="card-term" class="text-4xl font-bold text-gray-800 text-center slide-in"></p>
+          <p class="text-xs text-gray-400 mt-6">クリックまたはEnterで裏面を見る</p>
+        </div>
+        <div class="card-back absolute inset-0 flex flex-col items-center justify-center p-8 rounded-2xl bg-indigo-50">
+          <p id="card-desc" class="text-lg text-gray-700 text-center leading-relaxed mb-3"></p>
+          <p id="card-example" class="text-sm text-indigo-600 italic text-center"></p>
+          <p id="card-level-badge" class="mt-4 px-3 py-1 rounded-full text-xs font-bold"></p>
+        </div>
+      </div>
+    </div>
+
+    <!-- Actions -->
+    <div class="flex gap-3 mt-4">
+      <button onclick="markCard('wrong')" id="btn-wrong" class="flex-1 bg-red-100 hover:bg-red-200 text-red-700 font-semibold py-3 rounded-xl transition hidden">✗ 知らなかった</button>
+      <button onclick="markCard('unsure')" id="btn-unsure" class="flex-1 bg-yellow-100 hover:bg-yellow-200 text-yellow-700 font-semibold py-3 rounded-xl transition hidden">△ 曖昧</button>
+      <button onclick="markCard('correct')" id="btn-correct" class="flex-1 bg-green-100 hover:bg-green-200 text-green-700 font-semibold py-3 rounded-xl transition hidden">✓ 知ってた</button>
+      <button onclick="toggleBookmark()" id="btn-bm" class="bg-amber-100 hover:bg-amber-200 text-amber-700 font-semibold px-4 py-3 rounded-xl transition" aria-label="ブックマーク切り替え">☆</button>
+    </div>
+
+    <div class="flex justify-between items-center mt-3 text-sm text-gray-400">
+      <button onclick="prevCard()" class="px-4 py-2 bg-white rounded-lg shadow hover:bg-gray-50 transition" aria-label="前のカード">← 前</button>
+      <span id="card-progress"></span>
+      <button onclick="nextCard()" class="px-4 py-2 bg-white rounded-lg shadow hover:bg-gray-50 transition" aria-label="次のカード">次 →</button>
+    </div>
+  </div>
+
+  <!-- Empty State -->
+  <div id="empty-state" class="hidden bg-white rounded-2xl shadow p-10 text-center">
+    <p class="text-4xl mb-3">🎉</p>
+    <p class="text-xl font-bold text-gray-700">デッキ完走！</p>
+    <p id="session-result" class="text-gray-500 mt-2"></p>
+    <button onclick="restartDeck()" class="mt-4 bg-indigo-500 hover:bg-indigo-600 text-white px-6 py-3 rounded-xl font-semibold transition">もう一度</button>
+  </div>
+
+  <!-- Bookmarked -->
+  <div id="bookmark-filter-row" class="mt-3 hidden">
+    <button onclick="showBookmarkedOnly()" class="text-sm text-amber-600 hover:text-amber-800 underline">★ ブックマークのみ表示</button>
+  </div>
+</div>
+
+<script>
+function htmlEscape(s){return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');}
+
+const CARDS = [
+  // Network (12)
+  {term:'TCP/IP',cat:'network',level:'junior',desc:'インターネットの基本通信プロトコル群。TCPが信頼性ある転送を、IPがアドレッシングと経路制御を担う。',example:'例: Web通信はHTTP(S)がTCP/IP上で動作する'},
+  {term:'HTTP/HTTPS',cat:'network',level:'junior',desc:'WebブラウザとサーバーがHTMLや画像をやり取りするプロトコル。HTTPSはTLSで暗号化された安全版。',example:'例: https://example.com のhttpsが暗号化を示す'},
+  {term:'DNS',cat:'network',level:'junior',desc:'ドメイン名をIPアドレスに変換するシステム。電話帳に相当する分散型データベース。',example:'例: example.com → 93.184.216.34'},
+  {term:'CDN',cat:'network',level:'junior',desc:'コンテンツ配信ネットワーク。地理的に分散したサーバーでコンテンツをキャッシュし遅延を削減する。',example:'例: CloudFront・Cloudflare・Fastly'},
+  {term:'REST',cat:'network',level:'junior',desc:'HTTPを利用したAPI設計スタイル。リソースをURLで表現し、GETやPOSTなどのHTTPメソッドで操作する。',example:'例: GET /users/123 でユーザー情報取得'},
+  {term:'WebSocket',cat:'network',level:'middle',desc:'クライアント・サーバー間の双方向リアルタイム通信プロトコル。HTTPアップグレードで確立。',example:'例: チャットアプリ・株価リアルタイム表示'},
+  {term:'gRPC',cat:'network',level:'senior',desc:'GoogleのオープンソースRPCフレームワーク。Protocol Buffersでシリアライズし高速・型安全なAPI通信を実現。',example:'例: マイクロサービス間の内部通信'},
+  {term:'TLS/SSL',cat:'network',level:'middle',desc:'通信を暗号化するプロトコル。証明書で相手を認証し、共通鍵で通信内容を暗号化する。',example:'例: HTTPSの暗号化に使われる'},
+  {term:'負荷分散',cat:'network',level:'middle',desc:'ロードバランサーが複数サーバーへリクエストを振り分け、可用性とスループットを向上させる仕組み。',example:'例: nginx・AWS ALBがラウンドロビンで分散'},
+  {term:'BGP',cat:'network',level:'senior',desc:'インターネット上の自律システム間でルーティング情報を交換するプロトコル（Border Gateway Protocol）。',example:'例: ISP間の経路制御・クラウドのDirect Connect'},
+  {term:'IPv6',cat:'network',level:'middle',desc:'128ビットアドレスを持つIP次世代プロトコル。IPv4アドレス枯渇問題を解決し約340澗のアドレスを提供。',example:'例: 2001:0db8::/32'},
+  {term:'GraphQL',cat:'network',level:'middle',desc:'Facebookが開発したAPIクエリ言語。クライアントが必要なデータを明示的に指定して過不足なく取得できる。',example:'例: query { user(id:1){ name, email } }'},
+  // Database (12)
+  {term:'ACID',cat:'database',level:'junior',desc:'DBトランザクションの4つの性質: 原子性(Atomicity)・一貫性(Consistency)・独立性(Isolation)・永続性(Durability)。',example:'例: 銀行振込は「引落と入金が必ずセット」'},
+  {term:'N+1問題',cat:'database',level:'middle',desc:'1回のクエリで取得したN件のレコードに対し、関連データをN回個別にクエリしてしまうパフォーマンス問題。',example:'例: 記事一覧取得後にコメントをN回取得'},
+  {term:'インデックス',cat:'database',level:'junior',desc:'DBの検索を高速化するデータ構造。B-Treeが一般的。書込は遅くなるトレードオフがある。',example:'例: CREATE INDEX idx_email ON users(email)'},
+  {term:'正規化',cat:'database',level:'junior',desc:'データの冗長性を排除し整合性を高めるためのテーブル設計手法。第1〜第3正規形が基本。',example:'例: 住所を別テーブルに分離してDRYにする'},
+  {term:'シャーディング',cat:'database',level:'senior',desc:'大規模DBを複数サーバーに水平分割する手法。ユーザーIDのハッシュ値などでルーティングする。',example:'例: user_id % 4 でDBを4台に分散'},
+  {term:'CAP定理',cat:'database',level:'senior',desc:'分散システムで一貫性・可用性・ネットワーク分断耐性の3つを同時に満たすことはできないという定理。',example:'例: ZookeeperはCP、CassandraはAPを選択'},
+  {term:'レプリケーション',cat:'database',level:'middle',desc:'DBをプライマリとリードレプリカに複製し、読み込み負荷分散と可用性向上を実現する仕組み。',example:'例: MySQL binlogでリードレプリカに同期'},
+  {term:'ORM',cat:'database',level:'junior',desc:'オブジェクトとRDBの行をマッピングするライブラリ。SQLを直書きせずにオブジェクト操作でDB処理できる。',example:'例: ActiveRecord・Hibernate・Prisma'},
+  {term:'NoSQL',cat:'database',level:'middle',desc:'RDB以外のDB。ドキュメント型・KVS・カラム型・グラフ型などがあり、水平スケールに優れる。',example:'例: MongoDB・Redis・Cassandra・DynamoDB'},
+  {term:'トランザクション分離レベル',cat:'database',level:'senior',desc:'複数トランザクション並行時の干渉度合い。READ UNCOMMITTED〜SERIALIZABLEの4段階。',example:'例: PostgreSQLのデフォルトはREAD COMMITTED'},
+  {term:'デッドロック',cat:'database',level:'middle',desc:'2つのトランザクションが互いに相手のロック解除を待ちあって永久にブロックされる状態。',example:'例: Tx1がA→B、Tx2がB→Aの順でロック'},
+  {term:'コネクションプール',cat:'database',level:'middle',desc:'DBへの接続を使い回す仕組み。接続確立コストを削減し高スループットを実現する。',example:'例: HikariCP・pgBouncer'},
+  // Infra (12)
+  {term:'コンテナ',cat:'infra',level:'junior',desc:'OSカーネルを共有しながらアプリを隔離して実行する軽量仮想化技術。VMより高速に起動できる。',example:'例: Dockerでnginxコンテナを起動'},
+  {term:'Kubernetes',cat:'infra',level:'middle',desc:'コンテナのデプロイ・スケーリング・管理を自動化するオーケストレーションシステム（K8s）。',example:'例: kubectl apply -f deployment.yaml'},
+  {term:'CI/CD',cat:'infra',level:'junior',desc:'継続的インテグレーション＆デリバリー。コードのビルド・テスト・デプロイを自動化するパイプライン。',example:'例: GitHub Actions・GitLab CI・CircleCI'},
+  {term:'IaC',cat:'infra',level:'middle',desc:'インフラをコードで定義・管理する手法（Infrastructure as Code）。バージョン管理・再現性が向上する。',example:'例: Terraform・CloudFormation・Pulumi'},
+  {term:'サービスメッシュ',cat:'infra',level:'senior',desc:'マイクロサービス間の通信を管理するインフラ層。サイドカープロキシで暗号化・可観測性・流量制御を提供。',example:'例: Istio・Linkerd・Consul Connect'},
+  {term:'ブルーグリーンデプロイ',cat:'infra',level:'middle',desc:'Blue（現行）とGreen（新版）2環境を用意し、瞬時に切り替えることでゼロダウンタイムデプロイを実現。',example:'例: ALBのターゲットグループをBlue→Greenへ切替'},
+  {term:'カナリアリリース',cat:'infra',level:'middle',desc:'新バージョンを一部ユーザーにだけ先行リリースし、問題がなければ段階的に展開するデプロイ戦略。',example:'例: 5%のトラフィックを新バージョンに流す'},
+  {term:'オブザーバビリティ',cat:'infra',level:'senior',desc:'システムの内部状態を外部出力（メトリクス・ログ・トレース）から推測できる性質。3本柱=Metrics/Logs/Traces。',example:'例: Prometheus+Grafana+Jaeger'},
+  {term:'サーバーレス',cat:'infra',level:'middle',desc:'サーバー管理なしにコードを実行する実行モデル。イベント駆動で自動スケールし使った分だけ課金。',example:'例: AWS Lambda・Cloud Functions'},
+  {term:'eBPF',cat:'infra',level:'senior',desc:'Linuxカーネルを変更せずにカーネル内でプログラムを実行できる技術。高性能ネットワーク・可観測性ツールに活用。',example:'例: Cilium・Falco・bpftrace'},
+  {term:'GitOps',cat:'infra',level:'middle',desc:'Gitリポジトリを真実の源泉としてインフラ変更を管理する運用モデル。ArgoCDなどが自動同期。',example:'例: GitへのPush→ArgoCD→K8sクラスタへ反映'},
+  {term:'FinOps',cat:'infra',level:'middle',desc:'クラウドコストの可視化・最適化・説明責任を組織横断で実践する文化・プラクティス。',example:'例: 開発チームが毎週コストダッシュボードをレビュー'},
+  // Security (12)
+  {term:'XSS',cat:'security',level:'junior',desc:'クロスサイトスクリプティング。悪意あるスクリプトをページに注入し他ユーザーのブラウザで実行させる攻撃。',example:'例: 入力値をエスケープせずinnerHTMLに渡す脆弱性'},
+  {term:'SQLインジェクション',cat:'security',level:'junior',desc:'入力値に不正なSQLを混入させてDBを不正操作する攻撃。プリペアドステートメントで防御。',example:"例: ' OR '1'='1 でログイン回避"},
+  {term:'CSRF',cat:'security',level:'junior',desc:'クロスサイトリクエストフォージェリ。ログイン済みユーザーに意図しないリクエストを送信させる攻撃。',example:'例: 罠サイトから銀行の送金フォームにPOST'},
+  {term:'JWT',cat:'security',level:'middle',desc:'JSON Web Token。Base64エンコードされたヘッダー・ペイロード・署名で構成されるステートレス認証トークン。',example:'例: Authorization: Bearer eyJhbGci...'},
+  {term:'OAuth2.0',cat:'security',level:'middle',desc:'サードパーティにリソースアクセス権限を委譲する認可フレームワーク。認証はOpenID Connectが担う。',example:'例: Googleログインでアプリにアクセス許可'},
+  {term:'ゼロトラスト',cat:'security',level:'senior',desc:'「ネットワーク内は安全」という前提を捨て、すべてのアクセスを常に検証するセキュリティモデル。',example:'例: 社内ネットワークでもIDaaS認証+デバイス検証'},
+  {term:'SSRF',cat:'security',level:'senior',desc:'サーバーサイドリクエストフォージェリ。サーバーを経由して内部ネットワークに不正アクセスする攻撃。',example:'例: クラウドのIMDSv1をSSRFで悪用しIAMクレデンシャル取得'},
+  {term:'OWASP Top 10',cat:'security',level:'middle',desc:'Webアプリの重大なセキュリティリスクTop10をまとめたガイドライン。3年ごとに更新される業界標準。',example:'例: アクセス制御の不備・暗号化の失敗・インジェクション'},
+  {term:'mTLS',cat:'security',level:'senior',desc:'相互TLS認証。クライアントとサーバー双方が証明書を提示し認証する強固な通信保護。',example:'例: マイクロサービス間の通信をIstioでmTLS化'},
+  {term:'ペネトレーションテスト',cat:'security',level:'middle',desc:'倫理的ハッカーが実際に攻撃を試みてシステムの脆弱性を発見するセキュリティ評価手法。',example:'例: Burp Suite・Metasploitを使った侵入テスト'},
+  {term:'シークレット管理',cat:'security',level:'middle',desc:'APIキー・パスワードなど機密情報を安全に保管・配布する仕組み。ハードコードは厳禁。',example:'例: HashiCorp Vault・AWS Secrets Manager'},
+  {term:'コンテナセキュリティ',cat:'security',level:'senior',desc:'コンテナイメージの脆弱性スキャン・最小権限実行・実行時の異常検知などコンテナ固有のセキュリティ対策。',example:'例: Trivy・Falco・非rootユーザーで実行'},
+  // Architecture (12)
+  {term:'マイクロサービス',cat:'arch',level:'middle',desc:'アプリを独立してデプロイできる小さなサービス群に分割するアーキテクチャスタイル。疎結合・高凝集。',example:'例: 注文・在庫・決済を別サービスに分離'},
+  {term:'CQRS',cat:'arch',level:'senior',desc:'コマンドとクエリを分離するパターン（Command Query Responsibility Segregation）。書込と読込で最適なモデルを使える。',example:'例: 書込はRDB、読込はElasticsearchに分ける'},
+  {term:'イベント駆動',cat:'arch',level:'middle',desc:'コンポーネント間をイベント（メッセージ）で非同期に結合するアーキテクチャ。疎結合を実現する。',example:'例: 注文完了→Kafkaに発行→在庫・請求が個別消費'},
+  {term:'DDD',cat:'arch',level:'senior',desc:'ドメイン駆動設計。ビジネスドメインをコードの中心に置き、ユビキタス言語・集約・境界づけられたコンテキストで設計する。',example:'例: 注文集約・顧客集約をBoundedContextで分離'},
+  {term:'ヘキサゴナルアーキテクチャ',cat:'arch',level:'senior',desc:'ポートとアダプターパターン。ビジネスロジックをDBやUIなど外部依存から隔離する設計。テスタビリティが高い。',example:'例: UserRepositoryのinterfaceだけに依存しDB実装を差替え可'},
+  {term:'サーキットブレーカー',cat:'arch',level:'middle',desc:'依存サービスの障害を検知し自動的に切断、一定期間後に自動復旧を試みる障害伝播防止パターン。',example:'例: Resilience4j・Hystrixで実装'},
+  {term:'バックプレッシャー',cat:'arch',level:'senior',desc:'消費者が処理できないほどのデータを生産者から受け取らないよう流量制御するリアクティブシステムの概念。',example:'例: RxJavaのFlowable・Akka Streamsで実装'},
+  {term:'スケールアウト vs スケールアップ',cat:'arch',level:'junior',desc:'スケールアウト=サーバー台数を増やす水平スケール。スケールアップ=1台のスペックを上げる垂直スケール。',example:'例: クラウドはスケールアウト設計が一般的'},
+  {term:'APIゲートウェイ',cat:'arch',level:'middle',desc:'マイクロサービスの前面に置く単一エントリーポイント。認証・レート制限・ルーティング・ロギングを横断的に処理。',example:'例: Kong・AWS API Gateway・Envoy'},
+  {term:'BFF',cat:'arch',level:'middle',desc:'Backends For Frontends。Web・モバイルなどクライアント種別ごとに専用バックエンドを用意するパターン。',example:'例: モバイル用と管理画面用で別APIを用意'},
+  {term:'サーガパターン',cat:'arch',level:'senior',desc:'マイクロサービス間の分散トランザクションを連鎖イベントで実現し、失敗時は補償トランザクションでロールバック。',example:'例: 注文→在庫確保→決済の順で実行、失敗時は逆順で補償'},
+  {term:'スロットリング',cat:'arch',level:'middle',desc:'リソース保護のためAPIへのリクエスト数を時間単位で制限する機能。DoS対策・コスト管理に使用。',example:'例: 1ユーザーあたり100req/minの制限'},
+];
+
+let deck = [...CARDS];
+let currentIndex = 0;
+let sessionCorrect = 0, sessionTotal = 0;
+let isFlipped = false;
+let blitzMode = false, blitzTimer = null, blitzTimeLeft = 30, blitzScore = 0;
+let progress = JSON.parse(localStorage.getItem('flashcard-progress') || '{}');
+let bookmarks = JSON.parse(localStorage.getItem('flashcard-bookmarks') || '[]');
+let blitzRecord = parseInt(localStorage.getItem('flashcard-blitz') || '0');
+
+function applyFilters() {
+  const cat = document.getElementById('filter-category').value;
+  const level = document.getElementById('filter-level').value;
+  deck = CARDS.filter(c => (cat === 'all' || c.cat === cat) && (level === 'all' || c.level === level));
+  currentIndex = 0;
+  updateStats();
+}
+
+function startStudy() {
+  applyFilters();
+  if (deck.length === 0) return;
+  blitzMode = false;
+  document.getElementById('blitz-bar').classList.add('hidden');
+  sessionCorrect = 0; sessionTotal = 0;
+  document.getElementById('card-area').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  showCard();
+}
+
+function startBlitz() {
+  applyFilters();
+  if (deck.length === 0) return;
+  blitzMode = true;
+  blitzScore = 0;
+  blitzTimeLeft = 30;
+  document.getElementById('blitz-bar').classList.remove('hidden');
+  document.getElementById('blitz-score').textContent = '0';
+  document.getElementById('blitz-time').textContent = '30';
+  document.getElementById('blitz-progress').style.width = '100%';
+  document.getElementById('card-area').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  if (blitzTimer) clearInterval(blitzTimer);
+  blitzTimer = setInterval(() => {
+    blitzTimeLeft--;
+    document.getElementById('blitz-time').textContent = blitzTimeLeft;
+    document.getElementById('blitz-progress').style.width = (blitzTimeLeft / 30 * 100) + '%';
+    if (blitzTimeLeft <= 0) {
+      clearInterval(blitzTimer);
+      blitzTimer = null;
+      if (blitzScore > blitzRecord) { blitzRecord = blitzScore; localStorage.setItem('flashcard-blitz', blitzRecord); }
+      document.getElementById('blitz-bar').classList.add('hidden');
+      document.getElementById('card-area').classList.add('hidden');
+      document.getElementById('empty-state').classList.remove('hidden');
+      document.getElementById('session-result').textContent = `ブリッツ結果: ${blitzScore}問正解 / 記録: ${blitzRecord}問`;
+      updateStats();
+    }
+  }, 1000);
+  shuffle(deck);
+  currentIndex = 0;
+  showCard();
+}
+
+function shuffle(arr) {
+  for (let i = arr.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [arr[i], arr[j]] = [arr[j], arr[i]];
+  }
+  return arr;
+}
+
+function showCard() {
+  if (currentIndex >= deck.length) {
+    if (!blitzMode) {
+      document.getElementById('card-area').classList.add('hidden');
+      document.getElementById('empty-state').classList.remove('hidden');
+      document.getElementById('session-result').textContent = `正解率: ${sessionTotal > 0 ? Math.round(sessionCorrect/sessionTotal*100) : 0}% (${sessionCorrect}/${sessionTotal})`;
+    }
+    return;
+  }
+
+  const card = deck[currentIndex];
+  isFlipped = false;
+  const inner = document.getElementById('card-inner');
+  inner.classList.remove('flipped');
+
+  const catNames = {network:'ネットワーク',database:'データベース',infra:'インフラ',security:'セキュリティ',arch:'アーキテクチャ'};
+  const levelColors = {junior:'bg-green-100 text-green-700',middle:'bg-blue-100 text-blue-700',senior:'bg-purple-100 text-purple-700'};
+  const levelNames = {junior:'ジュニア',middle:'ミドル',senior:'シニア'};
+
+  document.getElementById('card-category').textContent = catNames[card.cat] || card.cat;
+  document.getElementById('card-term').textContent = card.term;
+  document.getElementById('card-desc').textContent = card.desc;
+  document.getElementById('card-example').textContent = card.example;
+  const badge = document.getElementById('card-level-badge');
+  badge.textContent = levelNames[card.level];
+  badge.className = `mt-4 px-3 py-1 rounded-full text-xs font-bold ${levelColors[card.level]}`;
+
+  document.getElementById('btn-wrong').classList.add('hidden');
+  document.getElementById('btn-unsure').classList.add('hidden');
+  document.getElementById('btn-correct').classList.add('hidden');
+
+  const bmBtn = document.getElementById('btn-bm');
+  bmBtn.textContent = bookmarks.includes(card.term) ? '★' : '☆';
+
+  document.getElementById('card-progress').textContent = `${currentIndex+1} / ${deck.length}`;
+  updateStats();
+}
+
+function flipCard() {
+  isFlipped = !isFlipped;
+  document.getElementById('card-inner').classList.toggle('flipped', isFlipped);
+  if (isFlipped && !blitzMode) {
+    document.getElementById('btn-wrong').classList.remove('hidden');
+    document.getElementById('btn-unsure').classList.remove('hidden');
+    document.getElementById('btn-correct').classList.remove('hidden');
+  }
+}
+
+function markCard(result) {
+  const card = deck[currentIndex];
+  if (result === 'correct') { sessionCorrect++; if (blitzMode) { blitzScore++; document.getElementById('blitz-score').textContent = blitzScore; } }
+  sessionTotal++;
+  progress[card.term] = result;
+  localStorage.setItem('flashcard-progress', JSON.stringify(progress));
+  currentIndex++;
+  showCard();
+}
+
+function nextCard() { if (blitzMode) return; currentIndex = Math.min(currentIndex + 1, deck.length - 1); showCard(); }
+function prevCard() { if (blitzMode) return; currentIndex = Math.max(currentIndex - 1, 0); showCard(); }
+
+function toggleBookmark() {
+  const card = deck[currentIndex];
+  const idx = bookmarks.indexOf(card.term);
+  if (idx === -1) bookmarks.push(card.term);
+  else bookmarks.splice(idx, 1);
+  localStorage.setItem('flashcard-bookmarks', JSON.stringify(bookmarks));
+  document.getElementById('btn-bm').textContent = bookmarks.includes(card.term) ? '★' : '☆';
+  updateStats();
+}
+
+function showBookmarkedOnly() {
+  deck = CARDS.filter(c => bookmarks.includes(c.term));
+  currentIndex = 0;
+  document.getElementById('card-area').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  showCard();
+}
+
+function restartDeck() {
+  currentIndex = 0;
+  sessionCorrect = 0; sessionTotal = 0;
+  document.getElementById('card-area').classList.remove('hidden');
+  document.getElementById('empty-state').classList.add('hidden');
+  showCard();
+}
+
+function updateStats() {
+  document.getElementById('stat-total').textContent = deck.length + '枚';
+  const answered = Object.keys(progress).length;
+  const correct = Object.values(progress).filter(v => v === 'correct').length;
+  document.getElementById('stat-rate').textContent = answered > 0 ? Math.round(correct/answered*100) + '%' : '-';
+  document.getElementById('stat-bm').textContent = bookmarks.length + '件';
+  document.getElementById('stat-blitz').textContent = blitzRecord > 0 ? blitzRecord + '問' : '-';
+  const bmRow = document.getElementById('bookmark-filter-row');
+  if (bookmarks.length > 0) bmRow.classList.remove('hidden');
+}
+
+applyFilters();
+updateStats();
+</script>
+</body>
+</html>
